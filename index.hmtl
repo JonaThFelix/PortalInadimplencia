@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portal de Inadimplência - Financeiro Alforge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- SheetJS (Excel) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF + html2canvas (PDF) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <style>
+    :root{
+      --bg:#0f172a; /* slate-900 */
+      --panel:#0b1225; /* darker panel */
+      --muted:#94a3b8; /* slate-400 */
+      --text:#e2e8f0; /* slate-200 */
+      --brand:#22d3ee; /* cyan-400 */
+      --accent:#a78bfa; /* violet-400 */
+      --ok:#34d399; /* emerald-400 */
+      --warn:#fbbf24; /* amber-400 */
+      --danger:#f87171; /* red-400 */
+      --card:#111827; /* gray-900 */
+      --chip:#1f2937; /* gray-800 */
+      --ring: rgba(34,211,238,.35);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+    *{ box-sizing: border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 500px at 10% -10%, rgba(167,139,250,.15), transparent 60%),
+                  radial-gradient(1100px 500px at 110% 0%, rgba(34,211,238,.12), transparent 60%),
+                  var(--bg);
+      color:var(--text);
+    }
+    header{
+      position: sticky; top:0; z-index:10; backdrop-filter: blur(10px);
+      background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.55));
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .container{ max-width:1200px; padding:24px; margin:0 auto; }
+    .title{
+      display:flex; align-items:center; gap:14px;
+    }
+    .title .logo{ width:44px; height:44px; display:grid; place-items:center; border-radius:14px; background:linear-gradient(135deg,var(--brand),var(--accent)); box-shadow: var(--shadow);
+      color:#0b1225; font-weight:900; font-size:20px; }
+    .title h1{ margin:0; font-size: clamp(20px, 2.5vw, 28px); letter-spacing:.3px; }
+    .subtitle{ margin:4px 0 0; color:var(--muted); font-size:14px; }
+
+    .grid{ display:grid; gap:18px; }
+    .grid.cols-3{ grid-template-columns: repeat(3, 1fr); }
+    .grid.cols-2{ grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 980px){ .grid.cols-3{ grid-template-columns: 1fr; } }
+    @media (max-width: 860px){ .grid.cols-2{ grid-template-columns: 1fr; } }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+      border:1px solid rgba(255,255,255,.06);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .card-header{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px dashed rgba(255,255,255,.06); }
+    .card-header h3{ margin:0; font-size:15px; font-weight:700; letter-spacing:.3px; }
+    .card-content{ padding:16px 18px; }
+
+    .kpis{ display:grid; grid-template-columns: repeat(4, 1fr); gap:16px; }
+    @media (max-width: 1100px){ .kpis{ grid-template-columns: repeat(2, 1fr);} }
+    @media (max-width: 640px){ .kpis{ grid-template-columns: 1fr; } }
+    .kpi{ background: linear-gradient(180deg, rgba(34,211,238,.06), rgba(167,139,250,.05)); border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:16px; position:relative; overflow:hidden; }
+    .kpi .label{ color:var(--muted); font-size:12px; }
+    .kpi .value{ font-size:clamp(22px,3.5vw,28px); font-weight:800; margin-top:6px; }
+    .kpi .delta{ font-size:12px; margin-top:6px; }
+
+    .toolbar{ display:flex; flex-wrap:wrap; gap:10px; }
+    .btn{ display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px; background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.04)); color:var(--text); border:1px solid rgba(255,255,255,.08); cursor:pointer; font-weight:600; box-shadow: var(--shadow); }
+    .btn:hover{ outline:2px solid var(--ring); }
+    .btn.primary{ background: linear-gradient(135deg, rgba(34,211,238,.2), rgba(167,139,250,.2)); border-color: rgba(34,211,238,.35); }
+    .btn.ghost{ background: transparent; border:1px dashed rgba(255,255,255,.15); }
+    .btn.danger{ background: linear-gradient(180deg, rgba(248,113,113,.18), rgba(248,113,113,.12)); border-color: rgba(248,113,113,.35); }
+
+    form{ display:grid; gap:10px; }
+    .row{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+    .row-3{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+    .row-2{ display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; }
+    @media (max-width: 980px){ .row, .row-3, .row-2{ grid-template-columns: 1fr; } }
+    label{ font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.3px; }
+    input, select{ width:100%; padding:12px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03); color:var(--text); outline:none; }
+    input:focus, select:focus{ border-color: var(--brand); box-shadow: 0 0 0 4px var(--ring); }
+
+    table{ width:100%; border-collapse: collapse; }
+    th, td{ padding:12px 10px; border-bottom:1px dashed rgba(255,255,255,.06); text-align:left; font-size:13px; }
+    th{ color:var(--muted); font-weight:700; letter-spacing:.3px; }
+    tbody tr:hover{ background:rgba(255,255,255,.03); }
+
+    .chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:var(--chip); border:1px solid rgba(255,255,255,.08); font-size:12px; }
+    .chip.ok{ border-color: rgba(52,211,153,.45); background: rgba(52,211,153,.12); }
+    .chip.warn{ border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.12); }
+    .chip.danger{ border-color: rgba(248,113,113,.45); background: rgba(248,113,113,.12); }
+
+    .state{ font-weight:800; letter-spacing:.5px; }
+    .footer{ color:var(--muted); font-size:12px; text-align:center; padding:28px 0 60px; }
+    .scroll{ overflow:auto; max-height: 420px; border-radius: 12px; }
+    .searchbar{ display:flex; gap:10px; align-items:center; }
+    .searchbar input{ flex:1; }
+    .charts-grid{ display:grid; grid-template-columns: repeat(2, 1fr); gap:18px; margin-top:18px; }
+    @media (max-width:900px){ .charts-grid{ grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="title">
+        <div class="logo">$</div>
+        <div>
+          <h1>Portal de Inadimplência e Folha</h1>
+          <div class="subtitle">Controle unificado de contratos, filiais, inadimplência e folha de pagamento</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container" id="app">
+    <!-- KPIs -->
+    <section class="kpis" id="kpis">
+      <div class="kpi">
+        <div class="label">Total de Contratos</div>
+        <div class="value" id="kpiContratos">0</div>
+        <div class="delta" id="kpiContratosInad">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Inadimplência (R$)</div>
+        <div class="value" id="kpiInad">R$ 0,00</div>
+        <div class="delta" id="kpiInadPerc">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Folha Total (R$)</div>
+        <div class="value" id="kpiFolha">R$ 0,00</div>
+        <div class="delta" id="kpiCobertura">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Clientes Inadimplentes</div>
+        <div class="value" id="kpiClientes">0</div>
+        <div class="delta" id="kpiEstados">—</div>
+      </div>
+    </section>
+
+    <div class="grid cols-3" style="margin-top:18px;">
+      <!-- Formularios -->
+      <section class="card">
+        <div class="card-header">
+          <h3><i class="ph-bold ph-buildings" aria-hidden="true"></i> Cadastrar Filial</h3>
+          <div class="toolbar">
+            <button class="btn ghost" id="btnSample">Carregar Exemplo</button>
+          </div>
+        </div>
+        <div class="card-content">
+          <form id="formFilial">
+            <div class="row">
+              <div>
+                <label>Filial</label>
+                <input required name="nome" placeholder="Ex.: PE" />
+              </div>
+              <div>
+                <label>UF</label>
+                <select required name="uf" id="ufFilial"></select>
+              </div>
+              <div>
+                <label>(R$)</label>
+                <input required name="folha" inputmode="decimal" placeholder="0,00" />
+              </div>
+              <div>
+                <label>Mês</label>
+                <input name="id" placeholder="Opcional" />
+              </div>
+            </div>
+            <div class="toolbar" style="margin-top:10px;">
+              <button type="submit" class="btn primary"><i class="ph-bold ph-plus-circle"></i> Adicionar Filial</button>
+              <button type="button" class="btn" id="limparFiliais"><i class="ph-bold ph-broom"></i> Limpar Filiais</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="card" style="grid-column: span 2;">
+        <div class="card-header">
+          <h3><i class="ph-bold ph-files"></i> Cadastrar Contrato</h3>
+          <div class="toolbar">
+            <button class="btn ghost" id="importarCSV"><i class="ph-bold ph-upload"></i> Importar CSV</button>
+            <input type="file" id="inputCSV" accept=".csv" hidden />
+          </div>
+        </div>
+        <div class="card-content">
+          <form id="formContrato">
+            <div class="row-3">
+              <div>
+                <label>Cliente</label>
+                <input required name="cliente" placeholder="Ex.: Compesa" />
+              </div>
+              <div>
+                <label>Nº Contrato</label>
+                <input required name="contratoId" placeholder="Ex.: CT-2025-001" />
+              </div>
+              <div>
+                <label>UF</label>
+                <select required name="uf" id="ufContrato"></select>
+              </div>
+            </div>
+            <div class="row-3">
+              <div>
+                <label>Valor Inadimplência (R$)</label>
+                <input required name="inad" inputmode="decimal" placeholder="R$ 0,00" />
+              </div>
+              <div>
+                <label>Folha (Contrato) (R$)</label>
+                <input required name="folha" inputmode="decimal" placeholder="R$ 0,00" />
+              </div>
+              <div>
+                <label>Status</label>
+                <select name="status">
+                  <option value="Inadimplente">Inadimplente</option>
+                  <option value="Adimplente">Adimplente</option>
+                  <option value="Atraso Parcial">Atraso Parcial</option>
+                </select>
+              </div>
+            </div>
+            <div class="row-2">
+              <div>
+                <label>Vencimento</label>
+                <input name="venc" type="date" />
+              </div>
+              <div>
+                <label>Observações</label>
+                <input name="obs" placeholder="Ex.: Aguardando Validação" />
+              </div>
+            </div>
+            <div class="toolbar" style="margin-top:10px;">
+              <button type="submit" class="btn primary"><i class="ph-bold ph-plus-circle"></i> Adicionar Contrato</button>
+              <button type="button" class="btn" id="limparContratos"><i class="ph-bold ph-broom"></i> Limpar Contratos</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:18px;">
+      <section class="card">
+        <div class="card-header">
+          <h3><i class="ph-bold ph-list-dashes"></i> Filiais</h3>
+          <div class="toolbar searchbar">
+            <input id="buscaFilial" placeholder="Buscar por nome ou UF…" />
+            <button class="btn ghost" id="exportarExcel"><i class="ph-bold ph-file-xls"></i> Exportar Excel</button>
+            <button class="btn ghost" id="exportarPDF"><i class="ph-bold ph-file-pdf"></i> Exportar PDF</button>
+          </div>
+        </div>
+        <div class="card-content scroll" id="wrapFiliais">
+          <table id="tabelaFiliais">
+            <thead>
+              <tr>
+                <th>Filial</th>
+                <th>UF</th>
+                <th>Folha (R$)</th>
+                <th>Mês</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h3><i class="ph-bold ph-hand-coins"></i> Contratos</h3>
+          <div class="toolbar searchbar" style="gap:8px;">
+            <input id="buscaContrato" placeholder="Buscar por cliente, contrato ou UF…" />
+            <select id="filtroStatus">
+              <option value="">Todos</option>
+              <option>Inadimplente</option>
+              <option>Adimplente</option>
+              <option>Atraso Parcial</option>
+            </select>
+            <!-- NEW: export apenas inadimplentes com filtros aplicados -->
+            <button class="btn ghost" id="exportarExcelInad" title="Exportar somente os contratos inadimplentes (com filtros)">Exportar Excel Inadimplentes</button>
+          </div>
+        </div>
+        <div class="card-content scroll" id="wrapContratos">
+          <table id="tabelaContratos">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Contrato</th>
+                <th>UF</th>
+                <th>Inadimplência (R$)</th>
+                <th>Folha (R$)</th>
+                <th>Status</th>
+                <th>Vencimento</th>
+                <th>Obs.</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:18px;">
+      <section class="card">
+        <div class="card-header">
+          <h3><i class="ph-bold ph-chart-bar"></i> Inadimplência por UF</h3>
+          <div class="toolbar">
+            <button class="btn ghost" id="btnAgruparUF"><i class="ph-bold ph-arrows-clockwise"></i> Atualizar</button>
+          </div>
+        </div>
+        <div class="card-content">
+          <canvas id="chartUF" height="180"></canvas>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h3><i class="ph-bold ph-chart-pie"></i> Composição • Status</h3>
+          <div class="toolbar">
+            <button class="btn ghost" id="btnAtualizarStatus"><i class="ph-bold ph-arrows-clockwise"></i> Atualizar</button>
+          </div>
+        </div>
+        <div class="card-content">
+          <canvas id="chartStatus" height="180"></canvas>
+        </div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:18px;">
+      <div class="card-header">
+        <h3><i class="ph-bold ph-chart-line-up"></i> Linha do Tempo (vencimentos)</h3>
+        <div class="toolbar">
+          <button class="btn ghost" id="btnAtualizarTimeline"><i class="ph-bold ph-arrows-clockwise"></i> Atualizar</button>
+        </div>
+      </div>
+      <div class="card-content">
+        <canvas id="chartTimeline" height="120"></canvas>
+      </div>
+    </section>
+
+    <!-- NEW: extra charts por Filial e por Contrato (distribuição de inadimplência) -->
+    <div class="charts-grid">
+      <section class="card">
+        <div class="card-header"><h3><i class="ph-bold ph-swap"></i> Inadimplência por Filial</h3></div>
+        <div class="card-content">
+          <canvas id="chartFilial" height="140"></canvas>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h3><i class="ph-bold ph-file-text"></i> Inadimplência por Contrato</h3></div>
+        <div class="card-content">
+          <canvas id="chartContrato" height="140"></canvas>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">Desenvolvido por Jonathan Felix em 2025.</div>
+  </main>
+
+<script>
+  // ===== Utilidades =====
+  const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+  const BRL = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' });
+  const fmtBR = v => BRL.format(Number(v||0));
+  const parseMoney = str => {
+    if (str === undefined || str === null || str === '') return 0;
+    // aceita formatos com pontos como milhares e vírgula como decimal
+    str = (''+str).replace(/[^\d,.-]/g,'');      // remove tudo exceto digitos, vírgula e ponto e hífen
+    str = str.replace(/\./g,'');                // remove pontos de milhares
+    str = str.replace(',', '.');                // transforma vírgula decimal em ponto
+    return Number(str) || 0;
+  };
+  const uid = () => Math.random().toString(36).slice(2,9);
+
+  // ===== Estado =====
+  const store = {
+    filiais: [],
+    contratos: [],
+  };
+  const save = () => localStorage.setItem('pf_store', JSON.stringify(store));
+  const load = () => {
+    const raw = localStorage.getItem('pf_store');
+    if (raw){ try{ const s = JSON.parse(raw); store.filiais = s.filiais||[]; store.contratos = s.contratos||[]; }catch(e){} }
+  };
+
+  // ===== DOM Helpers =====
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+  // ===== Inicialização de selects de UF =====
+  function initUFs(){
+    const opts = UFS.map(uf => `<option value="${uf}">${uf}</option>`).join('');
+    $('#ufFilial').innerHTML = opts;
+    $('#ufContrato').innerHTML = opts;
+  }
+
+  // ===== Renderização Tabelas =====
+  function renderFiliais(){
+    const term = ($('#buscaFilial').value||'').toLowerCase();
+    const rows = store.filiais
+      .filter(f => !term || f.nome.toLowerCase().includes(term) || f.uf.toLowerCase().includes(term))
+      .map(f => `
+        <tr>
+          <td>${f.nome}</td>
+          <td class="state">${f.uf}</td>
+          <td>${fmtBR(f.folha)}</td>
+          <td>${f.id||'—'}</td>
+          <td><button class="btn danger" data-del-filial="${f._id}"><i class="ph-bold ph-trash"></i> Remover</button></td>
+        </tr>
+      `).join('');
+    $('#tabelaFiliais tbody').innerHTML = rows || '<tr><td colspan="5">Sem filiais cadastradas.</td></tr>';
+  }
+
+  function renderContratos(){
+    const term = ($('#buscaContrato').value||'').toLowerCase();
+    const statusSel = $('#filtroStatus').value;
+    const rows = store.contratos
+      .filter(c => !term || (c.cliente||'').toLowerCase().includes(term) || (c.contratoId||'').toLowerCase().includes(term) || (c.uf||'').toLowerCase().includes(term))
+      .filter(c => !statusSel || c.status === statusSel)
+      .map(c => {
+        const cls = c.status === 'Inadimplente' ? 'danger' : (c.status === 'Atraso Parcial' ? 'warn' : 'ok');
+        return `
+          <tr>
+            <td>${c.cliente}</td>
+            <td>${c.contratoId}</td>
+            <td class="state">${c.uf}</td>
+            <td>${fmtBR(c.inad)}</td>
+            <td>${fmtBR(c.folha)}</td>
+            <td><span class="chip ${cls}">${c.status}</span></td>
+            <td>${c.venc || '—'}</td>
+            <td>${c.obs || '—'}</td>
+            <td><button class="btn danger" data-del-contrato="${c._id}"><i class="ph-bold ph-trash"></i></button></td>
+          </tr>
+        `;
+      }).join('');
+    $('#tabelaContratos tbody').innerHTML = rows || '<tr><td colspan="9">Sem contratos cadastrados.</td></tr>';
+  }
+
+  // ===== KPIs & Agregações =====
+  function atualizarKPIs(){
+    const totalContratos = store.contratos.length;
+    const inadTotal = store.contratos.reduce((s,c) => s + (c.inad||0), 0);
+    const folhaTotalContrato = store.contratos.reduce((s,c) => s + (c.folha||0), 0);
+    const folhaTotalFilial = store.filiais.reduce((s,f) => s + (f.folha||0), 0);
+    const folhaTotal = folhaTotalFilial + folhaTotalContrato; // duas dimensões
+    const clientesInad = new Set(store.contratos.filter(c => c.status !== 'Adimplente' && (c.inad||0) > 0).map(c => c.cliente)).size;
+    const estadosAfetados = new Set(store.contratos.filter(c => (c.inad||0) > 0).map(c => c.uf)).size;
+
+    $('#kpiContratos').textContent = totalContratos;
+    const qtdInad = store.contratos.filter(c => c.status !== 'Adimplente' && c.inad>0).length;
+    $('#kpiContratosInad').textContent = `${qtdInad} em atraso`;
+    $('#kpiInad').textContent = fmtBR(inadTotal);
+    $('#kpiInadPerc').textContent = totalContratos ? `${((qtdInad/totalContratos)*100).toFixed(1)}% dos contratos` : '—';
+    $('#kpiFolha').textContent = fmtBR(folhaTotal);
+    $('#kpiCobertura').textContent = folhaTotal ? `Inad/Folha: ${(inadTotal/folaTotalSafe(folhaTotal)*100).toFixed(1)}%` : '—';
+    $('#kpiClientes').textContent = clientesInad;
+    $('#kpiEstados').textContent = `${estadosAfetados} UFs impactadas`;
+  }
+
+  // helper to avoid division by zero in KPIs
+  function folaTotalSafe(val){ return val===0 ? 1 : val; }
+
+  // ===== Gráficos =====
+  let chartUF, chartStatus, chartTimeline, chartFilial, chartContrato;
+
+  function atualizarChartUF(){
+    const mapa = {};
+    store.contratos.forEach(c => {
+      mapa[c.uf] = (mapa[c.uf]||0) + (c.inad||0);
+    });
+    const labels = Object.keys(mapa).sort();
+    const data = labels.map(k => mapa[k]);
+    if (chartUF) chartUF.destroy();
+    chartUF = new Chart($('#chartUF'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label:'Inadimplência (R$)', data, backgroundColor: 'rgba(34,211,238,0.6)' }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ ticks:{ callback: v => BRL.format(v) } } } }
+    });
+  }
+
+  function atualizarChartStatus(){
+    const grupos = { 'Inadimplente':0, 'Adimplente':0, 'Atraso Parcial':0 };
+    store.contratos.forEach(c => grupos[c.status] = (grupos[c.status]||0) + (c.inad||0));
+    const labels = Object.keys(grupos);
+    const data = labels.map(k => grupos[k]);
+    if (chartStatus) chartStatus.destroy();
+    chartStatus = new Chart($('#chartStatus'), {
+      type:'pie', data: { labels, datasets:[{ data, backgroundColor: ['#f87171','#34d399','#fbbf24'] }] },
+      options:{ plugins:{ legend:{ position:'bottom' } } }
+    });
+  }
+
+  function atualizarChartTimeline(){
+    const mapa = {};
+    store.contratos.forEach(c => {
+      if (!c.venc) return;
+      const k = c.venc; // YYYY-MM-DD
+      mapa[k] = (mapa[k]||0) + (c.inad||0);
+    });
+    const labels = Object.keys(mapa).sort();
+    const data = labels.map(k => mapa[k]);
+    if (chartTimeline) chartTimeline.destroy();
+    chartTimeline = new Chart($('#chartTimeline'), {
+      type:'line', data:{ labels, datasets:[{ label:'Inadimplência por vencimento', data, tension:.35, fill:true, backgroundColor:'rgba(167,139,250,0.18)', borderColor:'rgba(167,139,250,0.9)' }] },
+      options:{ plugins:{ legend:{ display:false } }, scales:{ y:{ ticks:{ callback: v => BRL.format(v) } } } }
+    });
+  }
+
+  // NEW: atualiza gráfico de inadimplência por Filial (usa mapeamento por UF->filial quando possível)
+  function atualizarChartFilial(){
+    // aplica os mesmos filtros que a tabela de contratos (buscar + status)
+    const term = ($('#buscaContrato').value||'').toLowerCase();
+    const statusSel = $('#filtroStatus').value;
+    const filtered = store.contratos
+      .filter(c => (c.inad||0) > 0)
+      .filter(c => !term || (c.cliente||'').toLowerCase().includes(term) || (c.contratoId||'').toLowerCase().includes(term) || (c.uf||'').toLowerCase().includes(term))
+      .filter(c => !statusSel || c.status === statusSel);
+
+    // mapeia cada contrato para uma filial, se existir filial com mesmo UF usa nome da filial, senão usa UF
+    const mapa = {};
+    filtered.forEach(c => {
+      const filialMatch = store.filiais.find(f => f.uf === c.uf);
+      const key = filialMatch ? filialMatch.nome : (c.uf || '—');
+      mapa[key] = (mapa[key]||0) + (c.inad||0);
+    });
+
+    const labels = Object.keys(mapa).sort((a,b) => mapa[b]-mapa[a]); // sort decrescente por valor
+    const data = labels.map(k => mapa[k]);
+    if (chartFilial) chartFilial.destroy();
+    chartFilial = new Chart($('#chartFilial'), {
+      type:'bar',
+      data:{ labels, datasets:[{ label:'Inadimplência (R$)', data, backgroundColor:'rgba(167,139,250,0.85)' }] },
+      options:{ plugins:{ legend:{ display:false } }, scales:{ y:{ ticks:{ callback: v => BRL.format(v) } } } }
+    });
+  }
+
+  // NEW: atualiza gráfico de inadimplência por contrato (top N para visualização)
+  function atualizarChartContrato(){
+    const term = ($('#buscaContrato').value||'').toLowerCase();
+    const statusSel = $('#filtroStatus').value;
+    const filtered = store.contratos
+      .filter(c => (c.inad||0) > 0)
+      .filter(c => !term || (c.cliente||'').toLowerCase().includes(term) || (c.contratoId||'').toLowerCase().includes(term) || (c.uf||'').toLowerCase().includes(term))
+      .filter(c => !statusSel || c.status === statusSel);
+
+    // agrupa por contratoId
+    const mapa = {};
+    filtered.forEach(c => mapa[c.contratoId] = (mapa[c.contratoId]||0) + (c.inad||0));
+    // pegar top 10 contratos por valor (melhor visual)
+    const pairs = Object.entries(mapa).sort((a,b) => b[1] - a[1]).slice(0,10);
+    const labels = pairs.map(p=>p[0]);
+    const data = pairs.map(p=>p[1]);
+
+    if (chartContrato) chartContrato.destroy();
+    chartContrato = new Chart($('#chartContrato'), {
+      type:'pie',
+      data:{ labels, datasets:[{ data, backgroundColor: generatePalette(labels.length) }] },
+      options:{ plugins:{ legend:{ position:'bottom' } } }
+    });
+  }
+
+  function generatePalette(n){
+    // gera um array simples de cores (não crítico)
+    const base = ['#22c1c3','#7b61ff','#00b4d8','#90e0ef','#ffd166','#ff6b6b','#8ac926','#1982c4','#6a4c93','#f77f00'];
+    const out = [];
+    for(let i=0;i<n;i++) out.push(base[i%base.length]);
+    return out;
+  }
+
+  function refreshAll(){
+    renderFiliais();
+    renderContratos();
+    atualizarKPIs();
+    atualizarChartUF();
+    atualizarChartStatus();
+    atualizarChartTimeline();
+    atualizarChartFilial();
+    atualizarChartContrato();
+    save();
+  }
+
+  // ===== Eventos =====
+  function bindEvents(){
+    $('#formFilial').addEventListener('submit', e => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const obj = {
+        _id: uid(),
+        nome: fd.get('nome').trim(),
+        uf: fd.get('uf'),
+        folha: parseMoney(fd.get('folha')),
+        id: (fd.get('id')||'').trim(),
+      };
+      store.filiais.push(obj);
+      e.target.reset();
+      refreshAll();
+    });
+
+    $('#formContrato').addEventListener('submit', e => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const obj = {
+        _id: uid(),
+        cliente: (fd.get('cliente')||'').trim(),
+        contratoId: (fd.get('contratoId')||'').trim(),
+        uf: fd.get('uf'),
+        inad: parseMoney(fd.get('inad')),
+        folha: parseMoney(fd.get('folha')),
+        status: fd.get('status'),
+        venc: fd.get('venc')||'',
+        obs: (fd.get('obs')||'').trim(),
+      };
+      store.contratos.push(obj);
+      e.target.reset();
+      refreshAll();
+    });
+
+    $('#tabelaFiliais').addEventListener('click', e => {
+      const btn = e.target.closest('[data-del-filial]');
+      if (!btn) return;
+      const id = btn.getAttribute('data-del-filial');
+      const i = store.filiais.findIndex(x=>x._id===id);
+      if (i>-1){ store.filiais.splice(i,1); refreshAll(); }
+    });
+
+    $('#tabelaContratos').addEventListener('click', e => {
+      const btn = e.target.closest('[data-del-contrato]');
+      if (!btn) return;
+      const id = btn.getAttribute('data-del-contrato');
+      const i = store.contratos.findIndex(x=>x._id===id);
+      if (i>-1){ store.contratos.splice(i,1); refreshAll(); }
+    });
+
+    $('#buscaFilial').addEventListener('input', () => { renderFiliais(); });
+    $('#buscaContrato').addEventListener('input', () => { renderContratos(); atualizarChartFilial(); atualizarChartContrato(); });
+    $('#filtroStatus').addEventListener('change', () => { renderContratos(); atualizarChartFilial(); atualizarChartContrato(); });
+
+    $('#btnAgruparUF').addEventListener('click', atualizarChartUF);
+    $('#btnAtualizarStatus').addEventListener('click', atualizarChartStatus);
+    $('#btnAtualizarTimeline').addEventListener('click', atualizarChartTimeline);
+
+    $('#limparFiliais').addEventListener('click', () => { if (confirm('Remover TODAS as filiais?')){ store.filiais = []; refreshAll(); }});
+    $('#limparContratos').addEventListener('click', () => { if (confirm('Remover TODOS os contratos?')){ store.contratos = []; refreshAll(); }});
+
+    // Importar CSV (contratos)
+    $('#importarCSV').addEventListener('click', () => $('#inputCSV').click());
+    $('#inputCSV').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      // Espera cabeçalho: cliente,contratoId,uf,inad,folha,status,venc,obs
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      const head = lines.shift().split(',').map(h=>h.trim().toLowerCase());
+      const idx = h => head.indexOf(h);
+      for (const line of lines){
+        // nota: parsing CSV simples (vírgulas), para casos complexos recomendo CSV parser
+        const cols = line.split(',');
+        const obj = {
+          _id: uid(),
+          cliente: cols[idx('cliente')]||'',
+          contratoId: cols[idx('contratoid')]||'',
+          uf: (cols[idx('uf')]||'').toUpperCase(),
+          inad: parseMoney(cols[idx('inad')]),
+          folha: parseMoney(cols[idx('folha')]),
+          status: cols[idx('status')]||'Inadimplente',
+          venc: cols[idx('venc')]||'',
+          obs: cols[idx('obs')]||''
+        };
+        if (obj.contratoId) store.contratos.push(obj);
+      }
+      refreshAll();
+      e.target.value = '';
+      alert('Importação concluída.');
+    });
+
+    // Exportar Excel (completo: filiais + contratos + resumo)
+    $('#exportarExcel').addEventListener('click', exportarExcel);
+    // Exportar apenas inadimplentes (com filtros aplicados)
+    $('#exportarExcelInad').addEventListener('click', exportarExcelInad);
+    // Exportar PDF
+    $('#exportarPDF').addEventListener('click', exportarPDF);
+
+    // Demo data
+    $('#btnSample').addEventListener('click', carregarExemplo);
+  }
+
+  // ===== Exportações =====
+  function exportarExcel(){
+    const wb = XLSX.utils.book_new();
+
+    const wsFiliais = XLSX.utils.json_to_sheet(store.filiais.map(f => ({
+      Filial: f.nome, UF: f.uf, Folha: f.folha, ID: f.id || ''
+    })));
+    const wsContratos = XLSX.utils.json_to_sheet(store.contratos.map(c => ({
+      Cliente: c.cliente, Contrato: c.contratoId, UF: c.uf, Inadimplencia: c.inad, Folha: c.folha, Status: c.status, Vencimento: c.venc, Obs: c.obs
+    })));
+
+    // Resumo
+    const resumo = calcularResumo();
+    const wsResumo = XLSX.utils.json_to_sheet(resumo);
+
+    XLSX.utils.book_append_sheet(wb, wsFiliais, 'Filiais');
+    XLSX.utils.book_append_sheet(wb, wsContratos, 'Contratos');
+    XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+
+    XLSX.writeFile(wb, 'Portal-Inad-Folha.xlsx');
+  }
+
+  // NEW: exporta só contratos inadimplentes respeitando os filtros ativos (busca + status)
+  function exportarExcelInad(){
+    const term = ($('#buscaContrato').value||'').toLowerCase();
+    const statusSel = $('#filtroStatus').value;
+
+    const dados = store.contratos
+      .filter(c => (c.inad||0) > 0)
+      .filter(c => !term || (c.cliente||'').toLowerCase().includes(term) || (c.contratoId||'').toLowerCase().includes(term) || (c.uf||'').toLowerCase().includes(term))
+      .filter(c => !statusSel || c.status === statusSel)
+      .map(c => ({
+        Cliente: c.cliente,
+        Contrato: c.contratoId,
+        UF: c.uf,
+        'Inadimplência (R$)': c.inad,
+        'Folha (R$)': c.folha,
+        Status: c.status,
+        Vencimento: c.venc || '',
+        Obs: c.obs || ''
+      }));
+
+    if (dados.length === 0){
+      alert('Nenhum contrato inadimplente encontrado com os filtros atuais.');
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(dados);
+    XLSX.utils.book_append_sheet(wb, ws, 'Inadimplentes');
+    XLSX.writeFile(wb, `Inadimplentes_${(new Date()).toISOString().slice(0,10)}.xlsx`);
+  }
+
+  async function exportarPDF(){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'pt', 'a4');
+
+    const alvo = document.querySelector('main');
+    const canvas = await html2canvas(alvo, { scale: 2, backgroundColor: '#0f172a' });
+    const imgData = canvas.toDataURL('image/png');
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+    const imgWidth = canvas.width * ratio;
+    const imgHeight = canvas.height * ratio;
+    const marginX = (pageWidth - imgWidth) / 2;
+    const marginY = (pageHeight - imgHeight) / 2;
+
+    doc.addImage(imgData, 'PNG', marginX, marginY, imgWidth, imgHeight);
+    doc.save('Portal-Inad-Folha.pdf');
+  }
+
+  function calcularResumo(){
+    const totalContratos = store.contratos.length;
+    const qtdInad = store.contratos.filter(c => c.status !== 'Adimplente' && c.inad>0).length;
+    const inadTotal = store.contratos.reduce((s,c) => s + (c.inad||0), 0);
+    const folhaFiliais = store.filiais.reduce((s,f) => s + (f.folha||0), 0);
+    const folhaContratos = store.contratos.reduce((s,c) => s + (c.folha||0), 0);
+    const folhaTotal = folhaFiliais + folhaContratos;
+    const estados = Array.from(new Set(store.contratos.map(c => c.uf)));
+    const porUF = estados.map(uf => ({
+      UF: uf,
+      Inadimplencia: store.contratos.filter(c => c.uf===uf).reduce((s,c)=>s+(c.inad||0),0)
+    }));
+
+    return [
+      { Indicador: 'Total Contratos', Valor: totalContratos },
+      { Indicador: 'Contratos em Atraso', Valor: qtdInad },
+      { Indicador: 'Inadimplência Total', Valor: inadTotal },
+      { Indicador: 'Folha Filiais', Valor: folhaFiliais },
+      { Indicador: 'Folha Contratos', Valor: folhaContratos },
+      { Indicador: 'Folha Total', Valor: folhaTotal },
+      { Indicador: 'UFs com Inadimplência', Valor: porUF.length },
+      ...porUF.map(x => ({ Indicador: `UF ${x.UF}`, Valor: x.Inadimplencia }))
+    ];
+  }
+
+  // ===== Dados de Exemplo =====
+  function carregarExemplo(){
+    if (!confirm('Carregar um conjunto de exemplos? Isso adicionará registros aos seus dados atuais.')) return;
+    const exemplosFiliais = [
+      { _id: uid(), nome:'Matriz SP', uf:'SP', folha: 250000, id:'SP-001' },
+      { _id: uid(), nome:'Nordeste PE', uf:'PE', folha: 140000, id:'NE-PE' },
+      { _id: uid(), nome:'Sul PR', uf:'PR', folha: 120000, id:'SUL-PR' },
+    ];
+    const hoje = new Date();
+    const d = n => { const dt=new Date(hoje); dt.setDate(dt.getDate()+n); return dt.toISOString().slice(0,10); };
+    const exemplosContratos = [
+      { _id: uid(), cliente:'Governo do Estado de PE', contratoId:'CT-PE-001', uf:'PE', inad: 180000, folha: 85000, status:'Inadimplente', venc: d(-10), obs:'Aguardando repasse' },
+      { _id: uid(), cliente:'Prefeitura de Recife', contratoId:'CT-PE-045', uf:'PE', inad: 35000, folha: 26000, status:'Atraso Parcial', venc: d(-3), obs:'Promessa de pagamento' },
+      { _id: uid(), cliente:'Prefeitura de SP', contratoId:'CT-SP-012', uf:'SP', inad: 0, folha: 100000, status:'Adimplente', venc: d(5), obs:'' },
+      { _id: uid(), cliente:'TJ-PR', contratoId:'CT-PR-077', uf:'PR', inad: 98000, folha: 43000, status:'Inadimplente', venc: d(-20), obs:'Em contestação' },
+      { _id: uid(), cliente:'SEDUC-BA', contratoId:'CT-BA-113', uf:'BA', inad: 42000, folha: 22000, status:'Atraso Parcial', venc: d(2), obs:'' },
+    ];
+    store.filiais.push(...exemplosFiliais);
+    store.contratos.push(...exemplosContratos);
+    refreshAll();
+  }
+
+  // ===== Boot =====
+  function boot(){
+    initUFs();
+    load();
+    bindEvents();
+    refreshAll();
+  }
+  document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>
